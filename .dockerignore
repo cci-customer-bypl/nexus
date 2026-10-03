@@ -1,0 +1,7 @@
+.venv
+.vscode
+.ruff_cache
+*.pyc
+airflow
+.env
+.env.airflow
