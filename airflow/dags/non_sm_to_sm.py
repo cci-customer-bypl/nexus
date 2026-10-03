@@ -418,6 +418,7 @@ with DAG(
                 language="en",
                 timeZone="Asia/Kolkata",
                 typeof="unknown",
+                preferEmail=True,
             )
         except Exception as e:
             logger.error(f"Customer creation error in task_2: {e}")

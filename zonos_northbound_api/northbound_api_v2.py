@@ -120,7 +120,7 @@ class NorthboundApi:
         familyName: str | None = None,
         mobilePhone: str | None = None,
         secondaryPhone: str | None = None,
-        preferEmail: str | None = None,
+        preferEmail: bool | None = None,
         acceptedTerms: bool | None = None,
         city: str | None = None,
         country: str | None = None,
