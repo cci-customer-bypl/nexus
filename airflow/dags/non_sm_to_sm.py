@@ -488,7 +488,7 @@ with DAG(
             logger.info(f"Store data: {True}")
 
             device_parameters = {
-                f"ext.{key}": value
+                f"ext.{key}": value if value else ""
                 for key, value in body.newMeterDetails.model_dump(
                     exclude={"metersrno"}, mode="json"
                 ).items()
@@ -505,7 +505,6 @@ with DAG(
                 "manufacturer": body.newMeterDetails.metermake,
                 "description": "",
                 "inventoryState": "installed",
-                "managementState": "unknown",
                 "dispatchGroup": "",
                 "storeData": True,
                 "parentId": None,
