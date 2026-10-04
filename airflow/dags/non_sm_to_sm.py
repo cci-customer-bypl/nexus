@@ -446,30 +446,6 @@ with DAG(
             job_obj.save()
             raise e
 
-        # Set Metering Point parameters
-        try:
-            metering_point_parameters = {
-                f"ext.{key}": value
-                for key, value in body.consumerMaster.model_dump(
-                    exclude={"meterinstalldate", "latitude", "longitude", "meterStatus"},
-                    mode="json",
-                ).items()
-            }
-
-            response = client_v2.bulkSetMeteringPointParameters(
-                meteringPoint=job["service_point_id"],
-                parameters=metering_point_parameters,
-            )
-            logger.info(f"Metering Point parameters set response: {response}")
-        except Exception as e:
-            logger.error(f"Metering Point parameters set error in task_2: {e}")
-            job_obj.job_status = States.FAILED
-            job_obj.job_message = (
-                f"{job_obj.job_message} > zonos metering point parameters set failed ({repr(e)})"
-            )
-            job_obj.save()
-            raise e
-
         # Create Device
         try:
             device_id = job["sm_device_id"]
@@ -519,6 +495,31 @@ with DAG(
             job_obj.job_status = States.FAILED
             job_obj.job_message = (
                 f"{job_obj.job_message} > zonos device creation failed ({repr(e)})"
+            )
+            job_obj.save()
+            raise e
+
+        # Set Metering Point parameters
+        try:
+            metering_point_parameters = {
+                f"ext.{key}": value
+                for key, value in body.consumerMaster.model_dump(
+                    exclude={"meterinstalldate", "latitude", "longitude", "meterStatus"},
+                    mode="json",
+                ).items()
+            }
+            metering_point_parameters = {"ext.device_id": device_id}
+
+            response = client_v2.bulkSetMeteringPointParameters(
+                meteringPoint=job["service_point_id"],
+                parameters=metering_point_parameters,
+            )
+            logger.info(f"Metering Point parameters set response: {response}")
+        except Exception as e:
+            logger.error(f"Metering Point parameters set error in task_2: {e}")
+            job_obj.job_status = States.FAILED
+            job_obj.job_message = (
+                f"{job_obj.job_message} > zonos metering point parameters set failed ({repr(e)})"
             )
             job_obj.save()
             raise e
