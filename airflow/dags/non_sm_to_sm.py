@@ -508,7 +508,7 @@ with DAG(
                     mode="json",
                 ).items()
             }
-            metering_point_parameters = {"ext.device_id": device_id}
+            metering_point_parameters["ext.device_id"] = device_id
 
             response = client_v2.bulkSetMeteringPointParameters(
                 meteringPoint=job["service_point_id"],
