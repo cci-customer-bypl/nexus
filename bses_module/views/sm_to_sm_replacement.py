@@ -22,7 +22,6 @@ from zonos_northbound_api.northbound_api_v2 import NorthboundApi
 from config import settings
 
 from core.models import Consumer, DeviceType, DeviceTemplate
-from bses_module.models import NonSmToSmJob
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +57,8 @@ class NonSmartToSmartReplacementView(APIView):
             sm_device_id = body.newMeterDetails.metersrno
 
             # Get SM Device Type and Template
-            sm_device_type_name = body.newMeterDetails.meterType
-            sm_device_template_name = body.newMeterDetails.meterType
+            sm_device_type_name = f"{body.newMeterDetails.metermake}_{body.newMeterDetails.meterphase}_{body.newMeterDetails.metercategory}"
+            sm_device_template_name = f"{body.newMeterDetails.metermake}_{body.newMeterDetails.meterphase}_{body.newMeterDetails.metercategory}"
             sm_device_type = DeviceType.objects.filter(name=sm_device_type_name).exists()
             sm_device_template = DeviceTemplate.objects.filter(
                 name=sm_device_template_name
@@ -67,14 +66,6 @@ class NonSmartToSmartReplacementView(APIView):
 
             if not sm_device_type or not sm_device_template:
                 raise ValueError("SM device type or template does not exist")
-
-            duplicate_job_exists = NonSmToSmJob.objects.filter(
-                sm_device_id=sm_device_id,
-                state__in=[States.READY, States.IN_PROGRESS],
-            ).exists()
-
-            if duplicate_job_exists:
-                raise ValidationError(f"Fuck you job is already running for smart meter {sm_device_id}")
 
             # Check if SM device is already installed
             if DeviceInstallation.objects.filter(device_id=sm_device_id, is_active=True).exists():

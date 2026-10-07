@@ -263,7 +263,7 @@ with DAG(
 
                 # Create or get consumer
                 consumer, created = ensure_consumer(
-                    consumer_id=consumer_id, consumer_name=body.consumerMaster.consumerName
+                    consumer_id=consumer_id, consumer_name=body.consumerMaster.parameters.consumerName
                 )
 
                 # Create Service Point
@@ -291,23 +291,27 @@ with DAG(
                     consumer=consumer,
                     start_date=body.timestamp,
                     payment_type=PaymentType.PREPAID
-                    if body.newMeterDetails.prepaidpostpaidflag == True
+                    if body.newMeterDetails.paramters.prepaidpostpaidflag == True
                     else PaymentType.POSTPAID,
                 )
 
-                consumer_parameters = body.consumerMaster.model_dump(exclude={"accountId"})
+                consumer_parameters = body.consumerMaster.parameters.model_dump()
 
                 # Set consumer parameters
                 bulk_set_consumer_parameters(
                     consumer=consumer, parameter_config=consumer_parameters
                 )
+                if body.consumerMaster.position:
+                    bulk_set_consumer_parameters(consumer=consumer, parameter_config=body.consumerMaster.position.model_dump())
                 # Set service point parameters
                 bulk_set_service_point_parameters(
                     service_point=service_point, parameter_config=consumer_parameters
                 )
 
-                sm_device_type_name = f"{body.newMeterDetails.metermake}_{body.newMeterDetails.meterphase}_{body.newMeterDetails.metercategory}"
-                sm_device_template_name = f"{body.newMeterDetails.metermake}_{body.newMeterDetails.meterphase}_{body.newMeterDetails.metercategory}"
+
+
+                sm_device_type_name = body.newMeterDetails.meterType
+                sm_device_template_name = body.newMeterDetails.meterType
                 # Get SM Device Type and Template
                 sm_device_type = DeviceType.objects.get(name=sm_device_type_name)
                 sm_device_template = DeviceTemplate.objects.get(name=sm_device_template_name)
@@ -348,9 +352,8 @@ with DAG(
                 )
 
                 if body.oldMeterDetails:
-                    non_sm_device_id = (
-                        f"{body.oldMeterDetails.metermake}{body.oldMeterDetails.metersrno}"
-                    )
+                    non_sm_device_id = body.oldMeterDetails.metersrno
+                    
                     # Create or get non SM device
                     non_sm_device, created = ensure_device(
                         device_id=non_sm_device_id,
@@ -434,8 +437,8 @@ with DAG(
             client_v2.createMeteringPoint(
                 meteringPointId=job["service_point_id"],
                 groupUuid=group_uuid,
-                latitude=body.consumerMaster.latitude,
-                longitude=body.consumerMaster.longitude,
+                latitude=body.consumerMaster.position.latitude if body.consumerMaster.position else None,
+                longitude=body.consumerMaster.position.longitude if body.consumerMaster.position else None,
             )
         except Exception as e:
             logger.error(f"Metering Point creation error in task_2: {e}")
@@ -449,7 +452,7 @@ with DAG(
         # Create Device
         try:
             device_id = job["sm_device_id"]
-            device_type_template_name = f"{body.newMeterDetails.metermake}_{body.newMeterDetails.meterphase}_{body.newMeterDetails.metercategory}"
+            device_type_template_name = body.newMeterDetails.meterType
             logger.info(f"Device type template name: {device_type_template_name}")
             device_type_uuid = str(DeviceType.objects.get(name=device_type_template_name).id)
             device_template_uuid = str(
@@ -477,8 +480,8 @@ with DAG(
                 "groupId": group_uuid,
                 "typeId": device_type_uuid,
                 "templateId": device_template_uuid,
-                "model": body.newMeterDetails.meterphase,
-                "manufacturer": body.newMeterDetails.metermake,
+                "model": body.newMeterDetails.paramters.meterphase,
+                "manufacturer": body.newMeterDetails.paramters.metermake,
                 "description": "",
                 "inventoryState": "installed",
                 "dispatchGroup": "",

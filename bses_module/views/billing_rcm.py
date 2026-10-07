@@ -59,6 +59,8 @@ class BillingRcmView(APIView):
         )
         return response
 
+    def insert_job(self, data: BillingRcmRequest):
+
     @extend_schema(
         summary="RCM - MDM ODR Billing Integration: Scheduled Daily ODR",
         description="Public endpoint for scheduling a Meter Reading Order (MRO), executing one Current Billing On-Demand Reading (ODR) per day",
@@ -80,6 +82,7 @@ class BillingRcmView(APIView):
         try:
             # data is now an OdrInbound Pydantic object
             self.launch_odr(body)
+            self.insert_job(body)
 
             # 2. Success response envelope
             return Response(
