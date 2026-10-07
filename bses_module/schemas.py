@@ -33,10 +33,7 @@ class ConsumerPosition(BaseModel):
     latitude: float 
     longitude: float 
 
-
-class ConsumerMaster(BaseModel):
-    # Mandatory
-    accountId: str = Field(min_length=1, max_length=32)
+class ConsumerMasterParameters(BaseModel):
     consumerName: str
     address1: str
     connectionStatus: str
@@ -48,8 +45,6 @@ class ConsumerMaster(BaseModel):
     meterTypeFlag: str
 
     isVip: str = Field(default="N", max_length=1, examples=["Y", "N"])
-
-    position: ConsumerPosition | None = None
 
     # Optional
     firstName: str | None = None
@@ -91,6 +86,13 @@ class ConsumerMaster(BaseModel):
     scheduledBillingDate: str | None = None
 
 
+class ConsumerMaster(BaseModel):
+    # Mandatory
+    accountId: str = Field(min_length=1, max_length=32)
+    parameters: ConsumerMasterParameters
+    position: ConsumerPosition | None = None
+
+
 # ==============================================================================
 # Financial Details Schema
 # ==============================================================================
@@ -110,10 +112,7 @@ class FinancialDetails(BaseModel):
 # ==============================================================================
 # Old Meter Details Schema
 # ==============================================================================
-
-
-class OldMeterDetails(BaseModel):
-    metersrno: str
+class OldMeterParameters(BaseModel):
     metermake: str
     meterphase: str
     metercategory: str
@@ -133,14 +132,18 @@ class OldMeterDetails(BaseModel):
     kwhoffpeakexport: Decimal | None = None
     meterremovaldate: datetime | None = None
 
+class OldMeterDetails(BaseModel):
+    metersrno: str
+    meterType: str
+    parameters: OldMeterParameters
+    
+
 
 # ==============================================================================
 # New Meter Details Schema
 # ==============================================================================
 
-
-class NewMeterDetails(BaseModel):
-    metersrno: str = Field(min_length=1)
+class NewMeterParamters(BaseModel):
     metermake: str = Field(min_length=1)
     meterphase: str = Field(min_length=1)
     metercategory: str = Field(min_length=1)
@@ -162,6 +165,11 @@ class NewMeterDetails(BaseModel):
     netmeterflag: str | None = None
     meterstatus: str
     meterinstalldate: datetime
+
+class NewMeterDetails(BaseModel):
+    metersrno: str = Field(min_length=1)
+    meterType: str
+    paramters: NewMeterParamters
 
 
 # ==============================================================================
