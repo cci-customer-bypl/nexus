@@ -28,6 +28,11 @@ class ConsumerMasterHierarchy(BaseModel):
 # Consumer Master Schema
 # ==============================================================================
 
+class ConsumerPosition(BaseModel):
+
+    latitude: float 
+    longitude: float 
+
 
 class ConsumerMaster(BaseModel):
     # Mandatory
@@ -44,8 +49,7 @@ class ConsumerMaster(BaseModel):
 
     isVip: str = Field(default="N", max_length=1, examples=["Y", "N"])
 
-    latitude: float
-    longitude: float
+    position: ConsumerPosition | None = None
 
     # Optional
     firstName: str | None = None
