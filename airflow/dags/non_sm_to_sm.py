@@ -471,7 +471,7 @@ with DAG(
 
             device_parameters = {
                 f"ext.{key}": value if value else ""
-                for key, value in body.newMeterDetails.model_dump(
+                for key, value in body.newMeterDetails.paramters.model_dump(
                     exclude={"metersrno"}, mode="json"
                 ).items()
             }
