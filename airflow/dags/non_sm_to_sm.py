@@ -515,6 +515,7 @@ with DAG(
                 ).items()
             }
             metering_point_parameters["ext.device_id"] = device_id
+            metering_point_parameters["ext.accountId"] = body.consumerMaster.accountId
 
             logger.info(f"Metering point parameters: {metering_point_parameters}")
 
