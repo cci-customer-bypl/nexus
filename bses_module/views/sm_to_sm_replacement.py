@@ -9,13 +9,13 @@ from drf_spectacular.utils import extend_schema
 import logging
 # from zonos_northbound_api.northbound_api import NorthboundApi
 
-from bses_module.schemas import NonSmartToSmartRequest, NonSmartToSmartResponse
+from bses_module.schemas import SmartToSmartRequest, SmartToSmartResponse
 from pydantic import ValidationError
 
 
 from core.models import DeviceInstallation
 
-from bses_module.models import NonSmToSmJob, States
+from bses_module.models import SmToSmJob, States
 
 from zonos_northbound_api.northbound_api_v2 import NorthboundApi
 
@@ -26,10 +26,10 @@ from core.models import Consumer, DeviceType, DeviceTemplate
 logger = logging.getLogger(__name__)
 
 
-class NonSmartToSmartReplacementView(APIView):
+class SmartToSmartReplacementView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
-    serializer_class = NonSmartToSmartRequest
+    serializer_class = SmartToSmartRequest
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -44,16 +44,16 @@ class NonSmartToSmartReplacementView(APIView):
         return exc.errors(include_url=False, include_context=False, include_input=False)
 
     @extend_schema(
-        summary="UC-05: Non-Smart to Smart Meter Replacement",
-        description="API to replace non-smart meters with smart meters or for new service connections",
-        request=NonSmartToSmartRequest,
-        responses={200: NonSmartToSmartResponse},
+        summary="Smart to Smart Meter Replacement",
+        description="API to replace smart meters with smart meters or for new service connections",
+        request=SmartToSmartRequest,
+        responses={200: SmartToSmartResponse},
         tags=["Meter Lifecycle"],
     )
     def post(self, request, *args, **kwargs):
 
         try:
-            body: NonSmartToSmartRequest = NonSmartToSmartRequest.model_validate(request.data)
+            body: SmartToSmartRequest = SmartToSmartRequest.model_validate(request.data)
             sm_device_id = body.newMeterDetails.metersrno
 
             # Get SM Device Type and Template
@@ -90,27 +90,25 @@ class NonSmartToSmartReplacementView(APIView):
 
         consumer_id = body.consumerMaster.accountId
         sm_device_id = body.newMeterDetails.metersrno
-        non_sm_device_id = body.oldMeterDetails.metersrno if body.oldMeterDetails else None
 
         try:
             # Create the job
 
-            NonSmToSmJob.objects.create(
+            SmToSmJob.objects.create(
                 job_id=body.meterReplacementTransactionId,
                 consumer_id=consumer_id,
                 sm_device_id=sm_device_id,
-                non_sm_device_id=non_sm_device_id if non_sm_device_id else "None",
                 payload=body.model_dump(mode="json"),
                 job_created_at=body.timestamp,
                 job_status=States.READY,
             )
 
-            # job = NonSmToSmJob.objects.get(job_id=body.meterReplacementTransactionId)
+            # job = SmToSmJob.objects.get(job_id=body.meterReplacementTransactionId)
             return Response(
                 {
                     "status": States.READY,
                     "errorCode": None,
-                    "message": "Non SM to SM job created successfully",
+                    "message": "SM to SM job created successfully",
                     "meterReplacementTransactionId": body.meterReplacementTransactionId,
                     "typeOfReplacementCode": body.typeOfReplacementCode,
                     "accountId": body.consumerMaster.accountId,

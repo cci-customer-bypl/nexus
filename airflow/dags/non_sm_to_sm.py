@@ -35,7 +35,7 @@ from core.models import (
     DeviceInstallationParameterValue,
 )
 from bses_module.models import NonSmToSmJob, States
-from bses_module.schemas import NonSmartToSmartRequest
+from bses_module.schemas.schemas import NonSmartToSmartRequest
 
 
 logger = logging.getLogger(__name__)
@@ -263,7 +263,8 @@ with DAG(
 
                 # Create or get consumer
                 consumer, created = ensure_consumer(
-                    consumer_id=consumer_id, consumer_name=body.consumerMaster.parameters.consumerName
+                    consumer_id=consumer_id,
+                    consumer_name=body.consumerMaster.parameters.consumerName,
                 )
 
                 # Create Service Point
@@ -302,19 +303,17 @@ with DAG(
                     consumer=consumer, parameter_config=consumer_parameters
                 )
                 if body.consumerMaster.position:
-                    bulk_set_consumer_parameters(consumer=consumer, parameter_config=body.consumerMaster.position.model_dump())
+                    bulk_set_consumer_parameters(
+                        consumer=consumer,
+                        parameter_config=body.consumerMaster.position.model_dump(),
+                    )
                 # Set service point parameters
                 bulk_set_service_point_parameters(
                     service_point=service_point, parameter_config=consumer_parameters
                 )
-
-
-
-                sm_device_type_name = body.newMeterDetails.meterType
-                sm_device_template_name = body.newMeterDetails.meterType
-                # Get SM Device Type and Template
-                sm_device_type = DeviceType.objects.get(name=sm_device_type_name)
-                sm_device_template = DeviceTemplate.objects.get(name=sm_device_template_name)
+                type_template_name = f"{body.newMeterDetails.paramters.metermake}_{body.newMeterDetails.paramters.meterphase}_{body.newMeterDetails.paramters.metercategory}"
+                sm_device_type = DeviceType.objects.get(name=type_template_name)
+                sm_device_template = DeviceTemplate.objects.get(name=type_template_name)
 
                 # Create SM device
                 sm_device, created = ensure_device(
@@ -353,7 +352,7 @@ with DAG(
 
                 if body.oldMeterDetails:
                     non_sm_device_id = body.oldMeterDetails.metersrno
-                    
+
                     # Create or get non SM device
                     non_sm_device, created = ensure_device(
                         device_id=non_sm_device_id,
@@ -437,8 +436,12 @@ with DAG(
             client_v2.createMeteringPoint(
                 meteringPointId=job["service_point_id"],
                 groupUuid=group_uuid,
-                latitude=body.consumerMaster.position.latitude if body.consumerMaster.position else None,
-                longitude=body.consumerMaster.position.longitude if body.consumerMaster.position else None,
+                latitude=body.consumerMaster.position.latitude
+                if body.consumerMaster.position
+                else None,
+                longitude=body.consumerMaster.position.longitude
+                if body.consumerMaster.position
+                else None,
             )
         except Exception as e:
             logger.error(f"Metering Point creation error in task_2: {e}")
@@ -452,7 +455,7 @@ with DAG(
         # Create Device
         try:
             device_id = job["sm_device_id"]
-            device_type_template_name = body.newMeterDetails.meterType
+            device_type_template_name = f"{body.newMeterDetails.paramters.metermake}_{body.newMeterDetails.paramters.meterphase}_{body.newMeterDetails.paramters.metercategory}"
             logger.info(f"Device type template name: {device_type_template_name}")
             device_type_uuid = str(DeviceType.objects.get(name=device_type_template_name).id)
             device_template_uuid = str(

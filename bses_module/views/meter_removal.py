@@ -24,6 +24,7 @@ from config import settings
 from core.models import Consumer, DeviceType, DeviceTemplate
 
 from zonos_northbound_api.northbound_client import client_v2
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -79,27 +80,27 @@ class MeterRemovalView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        consumer_id = body.consumerMaster.accountId
+        consumer_id = body.accountId
+        job_id = body.meterRemovalTransactionId,
 
         try:
             # Create the job
 
             MeterRemovalJob.objects.create(
-                job_id=body.meterRemovalTransactionId,
+                job_id=job_id
                 consumer_id=consumer_id,
                 sm_device_id=sm_device_id,
-                non_sm_device_id=non_sm_device_id if non_sm_device_id else "None",
+                service_point_id = device_installation.objects.get(device=sm_device_id,is_active=True).service_point,
                 payload=body.model_dump(mode="json"),
                 job_created_at=body.timestamp,
                 job_status=States.READY,
             )
 
-            # job = MeterRemovalJob.objects.get(job_id=body.meterRemovalTransactionId)
             return Response(
                 {
                     "status": States.READY,
                     "errorCode": None,
-                    "message": "Non SM to SM job created successfully",
+                    "message": "Meter Removal job created successfully",
                     "meterRemovalTransactionId": body.meterRemovalTransactionId,
                     "typeOfRemovalCode": body.typeOfRemovalCode,
                     "accountId": body.consumerMaster.accountId,
@@ -121,33 +122,60 @@ class MeterRemovalView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        job_obj = MeterRemovalJob.objects.get(job_id=job_id)
+        job_obj.job_message = f"{job_obj.job_message}\n Processing Meter Removal"
+        job_obj.save()
         try:
-            # Call ZONOS API to achieve
-            # 1) Update device parameters,
-            # 2) Uninstall devie and
-            # 3) Close metering point association
+            with transaction.atomic():
+                # Call ZONOS API to achieve
+                # 1) Update device parameters,
+                # 2) Uninstall device and
+                # 3) Close metering point association
 
-            # Update device parameters
-            device_parameters = {
-                f"ext.{key}": value
-                for key, value in body.meterDetails.parameters.model_dump(
-                    exclude={"meterstatus", "meterremovaldate"},
-                    mode="json",
-                ).items()
-            }
-            metering_point_parameters["ext.device_id"] = device_id
+                # Update device parameters
+                device_parameters = {
+                    f"ext.{key}": value
+                    for key, value in body.meterDetails.parameters.model_dump(
+                        exclude={"meterstatus", "meterremovaldate"},
+                        mode="json",
+                    ).items()
+                }
 
-            response = client_v2.bulkSetDeviceParameters(
-                meteringPoint=job["service_point_id"],
-                parameters=device_parameters,
-            )
-            logger.info(f"Device parameters set response: {response}")
+                response = client_v2.bulkSetDeviceParameters(
+                    device=sm_device_id,
+                    parameters=device_parameters,
+                )
+                logger.info(f"Device parameters set response: {response}")
+
+                # Uninstall device 
+                response = client_v2.uninstallDevice(
+                    device=sm_device_id,
+                )
+                logger.info(f"Device uninstallation response: {response}")
+
+                # Close metering point association
+                response = client_v2.closeMeteringPointAssociation(
+                    metering_point=service_point_id,
+                    device=sm_device_id,
+                )
+                logger.info(f"Close Metering Point association response: {response}")
+
+#            except Exception as e:
+#                logger.error(f"Device parameters set error in task_2: {e}")
+#                job_obj.job_status = States.FAILED
+#                job_obj.job_message = (
+#                    f"{job_obj.job_message} > zonos metering point parameters set failed ({repr(e)})"
+#                )
+#                job_obj.save()
+#                raise e
+            logger.info(f"Meter Removal completed successfully for job {job_obj.job_id}")
+            job_obj.job_status = States.SUCCESS
+            job_obj.job_message = "Meter Removal completed successfully"
+            job_obj.save()
         except Exception as e:
-            logger.error(f"Device parameters set error in task_2: {e}")
+            logger.error(f"Error in Meter Removal: {e}")
             job_obj.job_status = States.FAILED
-            job_obj.job_message = (
-                f"{job_obj.job_message} > zonos metering point parameters set failed ({repr(e)})"
-            )
+            job_obj.job_message = str(e)
             job_obj.save()
             raise e
             

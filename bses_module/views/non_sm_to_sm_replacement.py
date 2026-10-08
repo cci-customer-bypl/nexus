@@ -9,7 +9,7 @@ from drf_spectacular.utils import extend_schema
 import logging
 # from zonos_northbound_api.northbound_api import NorthboundApi
 
-from bses_module.schemas import NonSmartToSmartRequest, NonSmartToSmartResponse
+from bses_module.schemas.schemas import NonSmartToSmartRequest, NonSmartToSmartResponse
 from pydantic import ValidationError
 
 
@@ -58,8 +58,8 @@ class NonSmartToSmartReplacementView(APIView):
             sm_device_id = body.newMeterDetails.metersrno
 
             # Get SM Device Type and Template
-            sm_device_type_name = body.newMeterDetails.meterType
-            sm_device_template_name = body.newMeterDetails.meterType
+            sm_device_type_name = f"{body.newMeterDetails.paramters.metermake}_{body.newMeterDetails.paramters.meterphase}_{body.newMeterDetails.paramters.metercategory}"
+            sm_device_template_name = f"{body.newMeterDetails.paramters.metermake}_{body.newMeterDetails.paramters.meterphase}_{body.newMeterDetails.paramters.metercategory}"
             sm_device_type = DeviceType.objects.filter(name=sm_device_type_name).exists()
             sm_device_template = DeviceTemplate.objects.filter(
                 name=sm_device_template_name
@@ -70,11 +70,11 @@ class NonSmartToSmartReplacementView(APIView):
 
             duplicate_job_exists = NonSmToSmJob.objects.filter(
                 sm_device_id=sm_device_id,
-                state__in=[States.READY, States.IN_PROGRESS],
+                job_status__in=[States.READY, States.IN_PROGRESS],
             ).exists()
 
             if duplicate_job_exists:
-                raise ValidationError(f"Fuck you job is already running for smart meter {sm_device_id}")
+                raise ValidationError(f"Job is already running for smart meter {sm_device_id}")
 
             # Check if SM device is already installed
             if DeviceInstallation.objects.filter(device_id=sm_device_id, is_active=True).exists():
@@ -118,7 +118,7 @@ class NonSmartToSmartReplacementView(APIView):
             return Response(
                 {
                     "status": States.READY,
-                    "errorCode": None,
+                    "errorCode": "RDY0001",
                     "message": "Non SM to SM job created successfully",
                     "meterReplacementTransactionId": body.meterReplacementTransactionId,
                     "typeOfReplacementCode": body.typeOfReplacementCode,

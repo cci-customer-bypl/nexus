@@ -96,8 +96,36 @@ class MeterRemovalJob(models.Model):
         db_table = "meter_removal_jobs"
         ordering = ["-job_created_at"]
         indexes = [
-            models.Index(fields=["job_id"], name="non_sm_to_sm_jobs_job_id_idx"),
+            models.Index(fields=["job_id"], name="meter_removal_jobs_job_id_idx"),
         ]
 
     def __str__(self):
         return f"{self.job_id},{self.job_status},{self.consumer_id},{self.service_point_id},{self.sm_device_id}"
+
+
+class SmToSmJob(models.Model):
+    job_id = models.CharField(max_length=100, primary_key=True, editable=False, db_column="job_id")
+    new_sm_device_id = models.CharField(max_length=100, db_column="new_sm_device_id")
+    old_sm_device_id = models.CharField(max_length=100, null=True, db_column="old_sm_device_id")
+    consumer_id = models.CharField(max_length=100, db_column="consumer_id")
+    service_point_id = models.CharField(max_length=100, null=True, db_column="service_point_id")
+    job_created_at = models.DateTimeField(auto_now_add=True, db_column="job_created_at")
+    job_run_at = models.DateTimeField(auto_now=True, db_column="job_run_at")
+    payload = models.JSONField(db_column="payload")
+    job_status = models.CharField(max_length=100, choices=States.choices, db_column="job_status")
+    job_message = models.TextField(db_column="job_message")
+    retries = models.IntegerField(
+        default=1,
+        help_text="Number of times the job has been retried",
+        db_column="retries",
+    )
+
+    class Meta:
+        db_table = "sm_to_sm_jobs"
+        ordering = ["-job_created_at"]
+        indexes = [
+            models.Index(fields=["job_id"], name="sm_to_sm_jobs_job_id_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.job_id},{self.job_status},{self.consumer_id},{self.service_point_id},{self.old_sm_device_id},{self.new_sm_device_id}"

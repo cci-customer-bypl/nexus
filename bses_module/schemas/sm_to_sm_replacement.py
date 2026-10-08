@@ -192,11 +192,11 @@ class AdditionalNonMandatoryParams(BaseModel):
 
 
 # ==============================================================================
-# Non-Smart → Smart Inbound
+# Smart → Smart Inbound
 # ==============================================================================
 
 
-class NonSmartToSmartRequest(BaseModel):
+class SmartToSmartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schemaVersion: str
@@ -215,7 +215,7 @@ class NonSmartToSmartRequest(BaseModel):
     additionalNonMandatoryParams: AdditionalNonMandatoryParams | None = None
 
 
-class NonSmartToSmartResponse(BaseModel):
+class SmartToSmartResponse(BaseModel):
     status: str
     errorCode: str | None = None
     message: str
@@ -223,38 +223,3 @@ class NonSmartToSmartResponse(BaseModel):
     typeOfReplacementCode: str
     accountId: str
 
-
-# ==============================================================================
-# ODR
-# ==============================================================================
-
-
-class BillingRcmRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    devices: list[str] = Field(min_length=1)
-    readingReason: int = Field(gt=0, lt=100)
-    externalId: str
-    fromTime: AwareDatetime = DateTimeStr
-    toTime: AwareDatetime = DateTimeStr
-    priority: Literal["HIGHEST", "HIGH", "NORMAL", "LOW", "LOWEST"] = "NORMAL"
-
-    @model_validator(mode="after")
-    def validate_time_range(self):
-        if self.fromTime > self.toTime:
-            raise ValueError("fromTime must be before toTime")
-        return self
-
-    @model_validator(mode="after")
-    def duplicate_devices_check(self):
-        if len(set(self.devices)) != len(self.devices):
-            raise ValueError("Duplicate devices found")
-        return self
-
-
-class BillingRcmResponse(BaseModel):
-    status: States
-    errorCode: str | None = None
-    message: str
-    externalId: str
-    errors: Any | None = None

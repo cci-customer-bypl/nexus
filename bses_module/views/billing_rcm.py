@@ -67,13 +67,11 @@ class BillingRcmView(APIView):
             for device_id in body.devices:
                 BillingRcmJob.objects.create(
                     device_id=device_id,
-                    external_id = body.externalId,
-                    from_time = body.fromTime,
-                    to_time = body.toTime,
-                    reading_reason = body.readingReason,
-                    job_status=States.READY,
+                    external_id=body.externalId,
+                    from_time=body.fromTime,
+                    to_time=body.toTime,
+                    reading_reason=body.readingReason,
                     remaining_attempts=3,
-                    message=body.model_dump(mode="json"),
                 )
 
             # job = BillingRcmJob.objects.get(job_id=body.meterReplacementTransactionId)
@@ -83,7 +81,7 @@ class BillingRcmView(APIView):
                     "errorCode": None,
                     "message": "BillingRCM job created successfully",
                     "externalId": body.externalId,
-                    "errors": []
+                    "errors": [],
                 },
                 status=status.HTTP_200_OK,
             )
@@ -94,8 +92,8 @@ class BillingRcmView(APIView):
                     "status": "ERROR",
                     "errorCode": "REQ002",
                     "message": "Failed to create job",
+                    "externalId": body.externalId,
                     "errors": repr(e),
-                    "meterReplacementTransactionId": body.meterReplacementTransactionId,
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
@@ -135,16 +133,20 @@ class BillingRcmView(APIView):
                 status=status.HTTP_200_OK,
             )
         except HTTPStatusError as error:
-            # logger.error(f"Error launching ODR: {error}")
+            try:
+                error_details = error.response.json()
+            except ValueError:
+                error_details = error.response.text or "No response body"
+
             return Response(
                 BillingRcmResponse(
                     status=States.FAILED,
                     errorCode="REQ001",
                     message="Error launching ODR",
                     externalId=body.externalId,
-                    errors=error.response.json(),
+                    errors=error_details,
                 ).model_dump(mode="json"),
-                status=status.HTTP_400_BAD_REQUEST,
+                status=error.response.status_code,
             )
         except Exception as error:
             # logger.error(f"Error launching ODR: {error}")

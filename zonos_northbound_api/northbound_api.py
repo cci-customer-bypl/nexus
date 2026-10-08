@@ -382,7 +382,7 @@ class NorthboundApi:
             data["retries"] = retries
         if retryDelay is not None:
             data["retryDelay"] = retryDelay
-
+        logger.info(f"bulkCreateReadProfile: {data}")
         response = self.restClient.post(endpoint, data, headers)
         return response.json()
 
