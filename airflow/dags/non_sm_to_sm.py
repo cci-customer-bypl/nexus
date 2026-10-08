@@ -509,12 +509,14 @@ with DAG(
         try:
             metering_point_parameters = {
                 f"ext.{key}": value
-                for key, value in body.consumerMaster.model_dump(
+                for key, value in body.consumerMaster.parameters.model_dump(
                     exclude={"meterinstalldate", "latitude", "longitude", "meterStatus"},
                     mode="json",
                 ).items()
             }
             metering_point_parameters["ext.device_id"] = device_id
+
+            logger.info(f"Metering point parameters: {metering_point_parameters}")
 
             response = client_v2.bulkSetMeteringPointParameters(
                 meteringPoint=job["service_point_id"],
