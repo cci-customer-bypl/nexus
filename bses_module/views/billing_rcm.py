@@ -14,6 +14,7 @@ from bses_module.schemas import BillingRcmRequest, BillingRcmResponse
 from config import settings
 from zonos_northbound_api.northbound_api import NorthboundApi
 from bses_module.models import States
+from bses_module.models import BillingRcmJob
 
 
 class BillingRcmView(APIView):
@@ -59,7 +60,46 @@ class BillingRcmView(APIView):
         )
         return response
 
-    def insert_job(self, data: BillingRcmRequest):
+    def insert_job(self, body: BillingRcmRequest):
+        try:
+            # Create the job
+
+            for device_id in body.devices:
+                BillingRcmJob.objects.create(
+                    device_id=device_id,
+                    external_id = body.externalId,
+                    from_time = body.fromTime,
+                    to_time = body.toTime,
+                    reading_reason = body.readingReason,
+                    job_created_at=datetime.now(),
+                    job_status=States.READY,
+                    remaining_attempts=3,
+                    message=body.model_dump(mode="json"),
+                )
+
+            # job = BillingRcmJob.objects.get(job_id=body.meterReplacementTransactionId)
+            return Response(
+                {
+                    "status": States.READY,
+                    "errorCode": None,
+                    "message": "Non SM to SM job created successfully",
+                    "externalId": body.externalId,
+                    "errors": []
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "ERROR",
+                    "errorCode": "REQ002",
+                    "message": "Failed to create job",
+                    "errors": repr(e),
+                    "meterReplacementTransactionId": body.meterReplacementTransactionId,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         summary="RCM - MDM ODR Billing Integration: Scheduled Daily ODR",

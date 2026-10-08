@@ -90,7 +90,7 @@ class ConsumerMaster(BaseModel):
     # Mandatory
     accountId: str = Field(min_length=1, max_length=32)
     parameters: ConsumerMasterParameters
-    position: ConsumerPosition | None = None
+    position: ConsumerPosition | None = Field(default=None, examples=[{ "latitude": 28.6139,"longitude": 77.2090,}])
 
 
 # ==============================================================================

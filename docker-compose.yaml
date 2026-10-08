@@ -372,7 +372,7 @@ services:
         condition: service_completed_successfully
 
   mdm-platform:
-    image: mdm-platform:latest
+    image: mdm-platform:1.0.0
     build:
       context: .
       dockerfile: Dockerfile
