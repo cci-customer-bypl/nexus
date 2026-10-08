@@ -30,8 +30,8 @@ class ConsumerMasterHierarchy(BaseModel):
 
 class ConsumerPosition(BaseModel):
 
-    latitude: float 
-    longitude: float 
+    latitude: float
+    longitude: float
 
 class ConsumerMasterParameters(BaseModel):
     consumerName: str
@@ -136,7 +136,6 @@ class OldMeterDetails(BaseModel):
     metersrno: str
     meterType: str
     parameters: OldMeterParameters
-    
 
 
 # ==============================================================================

@@ -9,19 +9,21 @@ from drf_spectacular.utils import extend_schema
 import logging
 # from zonos_northbound_api.northbound_api import NorthboundApi
 
-from bses_module.schemas import MeterRemovalRequest, MeterRemovalResponse
+from bses_module.schemas.meter_removal import MeterRemovalRequest, MeterRemovalResponse
 from pydantic import ValidationError
 
 
 from core.models import DeviceInstallation
 
-from bses_module.models import MeterRemovalJob, States
+#from bses_module.models import MeterRemovalJob, States
 
 from zonos_northbound_api.northbound_api_v2 import NorthboundApi
 
 from config import settings
 
 from core.models import Consumer, DeviceType, DeviceTemplate
+
+from zonos_northbound_api.northbound_client import client_v2
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ class MeterRemovalView(APIView):
 
     @extend_schema(
         summary="Meter Removal",
-        description="API to removal meters",
+        description="API to remove meters",
         request=MeterRemovalRequest,
         responses={200: MeterRemovalResponse},
         tags=["Meter Lifecycle"],
@@ -56,20 +58,9 @@ class MeterRemovalView(APIView):
             body: MeterRemovalRequest = MeterRemovalRequest.model_validate(request.data)
             sm_device_id = body.meterDetails.metersrno
 
-            # Get SM Device Type and Template
-            sm_device_type_name = f"{body.meterDetails.metermake}_{body.meterDetails.meterphase}_{body.meterDetails.metercategory}"
-            sm_device_template_name = f"{body.meterDetails.metermake}_{body.meterDetails.meterphase}_{body.meterDetails.metercategory}"
-            sm_device_type = DeviceType.objects.filter(name=sm_device_type_name).exists()
-            sm_device_template = DeviceTemplate.objects.filter(
-                name=sm_device_template_name
-            ).exists()
-
-            if not sm_device_type or not sm_device_template:
-                raise ValueError("SM device type or template does not exist")
-
             # Check if SM device is already installed
-            if DeviceInstallation.objects.filter(device_id=sm_device_id, is_active=True).exists():
-                raise ValueError(f"SM device {sm_device_id} is already installed")
+            if not DeviceInstallation.objects.filter(device_id=sm_device_id, is_active=True).exists():
+                raise ValueError(f"SM device {sm_device_id} is not installed")
         except (ValidationError, ValueError) as exc:
             return Response(
                 {
@@ -89,8 +80,6 @@ class MeterRemovalView(APIView):
             )
 
         consumer_id = body.consumerMaster.accountId
-        sm_device_id = body.meterDetails.metersrno
-        non_sm_device_id = body.oldMeterDetails.metersrno if body.oldMeterDetails else None
 
         try:
             # Create the job
@@ -131,6 +120,37 @@ class MeterRemovalView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+        try:
+            # Call ZONOS API to achieve
+            # 1) Update device parameters,
+            # 2) Uninstall devie and
+            # 3) Close metering point association
+
+            # Update device parameters
+            device_parameters = {
+                f"ext.{key}": value
+                for key, value in body.meterDetails.parameters.model_dump(
+                    exclude={"meterstatus", "meterremovaldate"},
+                    mode="json",
+                ).items()
+            }
+            metering_point_parameters["ext.device_id"] = device_id
+
+            response = client_v2.bulkSetDeviceParameters(
+                meteringPoint=job["service_point_id"],
+                parameters=device_parameters,
+            )
+            logger.info(f"Device parameters set response: {response}")
+        except Exception as e:
+            logger.error(f"Device parameters set error in task_2: {e}")
+            job_obj.job_status = States.FAILED
+            job_obj.job_message = (
+                f"{job_obj.job_message} > zonos metering point parameters set failed ({repr(e)})"
+            )
+            job_obj.save()
+            raise e
+            
 
         # # 2. Success response envelope
         # return Response({

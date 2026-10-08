@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from httpx._exceptions import HTTPStatusError
-from bses_module.schemas import BillingRcmRequest, BillingRcmResponse
+from bses_module.schemas.schemas import BillingRcmRequest, BillingRcmResponse
 from config import settings
 from zonos_northbound_api.northbound_api import NorthboundApi
 from bses_module.models import States
@@ -71,7 +71,6 @@ class BillingRcmView(APIView):
                     from_time = body.fromTime,
                     to_time = body.toTime,
                     reading_reason = body.readingReason,
-                    job_created_at=datetime.now(),
                     job_status=States.READY,
                     remaining_attempts=3,
                     message=body.model_dump(mode="json"),
@@ -82,7 +81,7 @@ class BillingRcmView(APIView):
                 {
                     "status": States.READY,
                     "errorCode": None,
-                    "message": "Non SM to SM job created successfully",
+                    "message": "BillingRCM job created successfully",
                     "externalId": body.externalId,
                     "errors": []
                 },
