@@ -7,11 +7,6 @@ from pydantic import BaseModel, Field, ConfigDict
 DateTimeStr = Field(json_schema_extra={"example": "1970-01-01T00:00:00Z"})
 
 
-class ConsumerMaster(BaseModel):
-    # Mandatory
-    accountId: str = Field(min_length=1, max_length=32)
-
-
 # ==============================================================================
 # Old Meter Details Schema
 # ==============================================================================
@@ -85,7 +80,7 @@ class SmartToSmartRequest(BaseModel):
     typeOfReplacementCode: Literal["2"]
     retryCount: int | None = None
 
-    consumerMaster: ConsumerMaster
+    accountId: str = Field(min_length=1, max_length=32)
     #    consumerMasterHierarchy: ConsumerMasterHierarchy
     newMeterDetails: NewMeterDetails
 

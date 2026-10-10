@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 import logging
 
-from bses_module.schemas.sm_to_sm import SmartToSmartRequest
+from bses_module.schemas.sm_to_sm import SmartToSmartRequest, SmartToSmartResponse
 from pydantic import ValidationError
 
 from core.models import DeviceInstallation
@@ -226,7 +226,7 @@ class SmartToSmartReplacementView(APIView):
         summary="Smart to Smart Meter Replacement",
         description="API to replace smart meters with smart meters or for new service connections",
         request=SmartToSmartRequest,
-        responses=SmartToSmartRequest,
+        responses=SmartToSmartResponse,
         tags=["Meter Lifecycle"],
     )
     def post(self, request, *args, **kwargs):
@@ -276,7 +276,7 @@ class SmartToSmartReplacementView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        consumer_id = body.consumerMaster.accountId
+        consumer_id = body.accountId
 
         try:
             # Create the job
@@ -292,20 +292,6 @@ class SmartToSmartReplacementView(APIView):
                 job_status=States.READY,
             )
 
-            # job = SmToSmJob.objects.get(job_id=body.meterReplacementTransactionId)
-        # jobs_queryset = SmToSmJob.objects.filter(job_status=States.READY)
-        #            return Response(
-        #                {
-        #                    "status": States.READY,
-        #                    "errorCode": None,
-        #                    "message": "SM to SM job created successfully",
-        #                    "meterReplacementTransactionId": body.meterReplacementTransactionId,
-        #                    "typeOfReplacementCode": body.typeOfReplacementCode,
-        #                    "accountId": body.consumerMaster.accountId,
-        #                },
-        #                status=status.HTTP_200_OK,
-        #            )
-
         except Exception as e:
             return Response(
                 {
@@ -315,7 +301,7 @@ class SmartToSmartReplacementView(APIView):
                     "errors": repr(e),
                     "meterReplacementTransactionId": body.meterReplacementTransactionId,
                     "typeOfReplacementCode": body.typeOfReplacementCode,
-                    "accountId": body.consumerMaster.accountId,
+                    "accountId": body.accountId,
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
@@ -354,6 +340,7 @@ class SmartToSmartReplacementView(APIView):
                 old_sm_device_installation = DeviceInstallation.objects.get(
                     device=old_sm_device, is_active=True
                 )
+
                 # Set Old Device Installation end parameters
                 bulk_set_old_sm_device_installation_parameters(
                     old_sm_device_installation,
@@ -405,53 +392,7 @@ class SmartToSmartReplacementView(APIView):
                     ),
                 )
 
-                logger.info(">>>>>>>>>>>>>>>>")
-                # Get old sm device type and template
-                old_type_template_name = f"{body.oldMeterDetails.parameters.metermake}_{body.oldMeterDetails.parameters.meterphase}_{body.oldMeterDetails.parameters.metercategory}"
-                #                logger.info(DeviceType.objects.filter(old_type_template_name))
-                #                logger.info("||||||||||||||||")
-                #                logger.info(DeviceType.objects.get(old_type_template_name))
-                old_sm_device_type = DeviceType.objects.get(
-                    #                    id="9c423eb7-e2dc-4a66-b82f-409be8bb4268"
-                    #                    id="705c53bc-5de5-4112-b80f-97a87dac3756"
-                    name=old_type_template_name
-                )
-                logger.info("<<<<<<<<<<<<<<<<")
-                old_sm_device_template = DeviceTemplate.objects.get(
-                    #                    id="705c53bc-5de5-4112-b80f-97a87dac3756"
-                    name=old_type_template_name
-                )
-
-                #                if body.oldMeterDetails:
-                old_sm_device_id = body.oldMeterDetails.metersrno
-
-                # Create or get old SM device
-                old_sm_device, created = ensure_device(
-                    device_id=old_sm_device_id,
-                    device_type=old_sm_device_type,
-                    device_template=old_sm_device_template,
-                )
-
-                # Set parameters for old sm device
-                bulk_set_device_parameters(
-                    device=old_sm_device,
-                    parameter_config=body.oldMeterDetails.model_dump(exclude={"metersrno"}),
-                )
-
-                # Un-install old sm_device
-                old_sm_device_installation = DeviceInstallation.objects.get(
-                    device=old_sm_device, is_active=True
-                )
-                old_sm_device_installation.is_active = False
-                old_sm_device_installation.save()
-
-                # Set parameters for old sm device uninstallation
-                bulk_set_old_sm_device_installation_parameters(
-                    device_installation=old_sm_device_installation,
-                    parameter_config=body.oldMeterDetails.model_dump(exclude={"metersrno"}),
-                )
-
-                job_obj.service_point_id = service_point.id
+                job_obj.service_point_id = old_sm_device_installation.service_point.id
                 job_obj.job_message = f"{job_obj.job_message}\n MDM Asset creation completed"
                 job_obj.save()
                 logger.info(f"Completed successfully for job {job_id}")
@@ -500,10 +441,11 @@ class SmartToSmartReplacementView(APIView):
                 # Create Device
                 try:
                     device_id = new_sm_device_id
-                    logger.info(f"Device type template name: {new_type_template_name}")
-                    device_type_uuid = str(DeviceType.objects.get(name=new_type_template_name).id)
+                    logger.info(f"Device type template name: {new_sm_device_type_name}")
+                    logging.info(f"Device template name: {new_sm_device_template_name}")
+                    device_type_uuid = str(DeviceType.objects.get(name=new_sm_device_type_name).id)
                     device_template_uuid = str(
-                        DeviceTemplate.objects.get(name=new_type_template_name).id
+                        DeviceTemplate.objects.get(name=new_sm_device_template_name).id
                     )
 
                     logger.info(f"Device type uuid: {device_type_uuid}")
@@ -515,11 +457,11 @@ class SmartToSmartReplacementView(APIView):
 
                     device_parameters = {
                         f"ext.{key}": value if value else ""
-                        for key, value in body.newMeterDetails.model_dump(
-                            exclude={"metersrno"}, mode="json"
-                        ).items()
+                        for key, value in body.newMeterDetails.model_dump(mode="json").items()
                     }
-                    device_parameters["ext.servicepointid"] = service_point_id
+                    device_parameters["ext.servicepointid"] = (
+                        old_sm_device_installation.service_point.id
+                    )
 
                     device: dict = {
                         "id": device_id,
@@ -551,17 +493,10 @@ class SmartToSmartReplacementView(APIView):
 
                 # Set Metering Point parameters
                 try:
-                    #    metering_point_parameters = {
-                    #        f"ext.{key}": value
-                    #        for key, value in body.consumerMaster.model_dump(
-                    #            exclude={"meterinstalldate", "latitude", "longitude", "meterStatus"},
-                    #            mode="json",
-                    #        ).items()
-                    #    }
                     metering_point_parameters = {"ext.device_id": new_sm_device_id}
 
                     response = client_v2.bulkSetMeteringPointParameters(
-                        meteringPoint=service_point_id,
+                        meteringPoint=old_sm_device_installation.service_point.id,
                         parameters=metering_point_parameters,
                     )
 
@@ -580,7 +515,17 @@ class SmartToSmartReplacementView(APIView):
             job_obj.job_message = f"{job_obj.job_message}\n Zonos Asset creation completed"
             job_obj.save()
             returnMessage = "Consumer and meter created successfully"
-            errCode = None
+            return Response(
+                SmartToSmartResponse(
+                    status=States.READY,
+                    errorCode=None,
+                    message="Consumer and meter created successfully",
+                    meterReplacementTransactionId=body.meterReplacementTransactionId,
+                    typeOfReplacementCode=body.typeOfReplacementCode,
+                    accountId=body.accountId,
+                ),
+                status=status.HTTP_200_OK,
+            )
 
         except Exception as e:
             logger.error(f"Error in Zonos Asset creation {e}")
@@ -589,33 +534,14 @@ class SmartToSmartReplacementView(APIView):
             job_obj.save()
             returnMessage = str(e)
             errCode = "ERROR02"
-        #            raise e
-        return Response(
-            {
-                "status": "SUCCESS",
-                "errorCode": errCode,
-                "message": returnMessage,
-                "meterReplacementTransactionId": body.meterReplacementTransactionId,
-                "typeOfReplacementCode": body.typeOfReplacementCode,
-                "accountId": body.consumerMaster.accountId,
-            },
-            status=status.HTTP_200_OK,
-        )
-
-
-#    jobs = get_jobs()
-
-#    task_1 = task_1.expand(job=jobs)
-#    task_2 = task_2.expand(job=task_1)
-#    complete_job_status.expand(job=task_2)
-
-
-# # 2. Success response envelope
-# return Response({
-#     "status": "SUCCESS",
-#     "errorCode": None,
-#     "message": "Consumer and meter created successfully",
-#     "meterReplacementTransactionId": data["meterReplacementTransactionId"],
-#     "typeOfReplacementCode": data["typeOfReplacementCode"],
-#     "accountId": data["consumerMaster"]["accountId"]
-# }, status=status.HTTP_200_OK)
+            return Response(
+                SmartToSmartResponse(
+                    status=States.FAILED,
+                    errorCode=errCode,
+                    message=returnMessage,
+                    meterReplacementTransactionId=body.meterReplacementTransactionId,
+                    typeOfReplacementCode=body.typeOfReplacementCode,
+                    accountId=body.accountId,
+                ),
+                status=status.HTTP_200_OK,
+            )
