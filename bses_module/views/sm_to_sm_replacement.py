@@ -337,6 +337,11 @@ class SmartToSmartReplacementView(APIView):
                 #                consumer = Consumer.objects.get(consumer_id=consumer_id)
                 #                logger.info(f"Consumer {consumer_id} already exists")
 
+                new_sm_device_template = DeviceTemplate.objects.get(
+                    name=new_sm_device_template_name
+                )
+                new_sm_device_type = DeviceType.objects.get(name=new_sm_device_type_name)
+
                 # Get Old Device
                 old_sm_device = Device.objects.get(device_id=old_sm_device_id)
                 old_sm_device.status = DeviceStatus.REMOVED
@@ -411,24 +416,7 @@ class SmartToSmartReplacementView(APIView):
                 #            - Create device with device parameters
 
                 group_uuid = "e327f3e7-774d-48e2-b44a-f26e5b3a9434"
-                # Create customer
-                #                try:
-                #                   client_v2.createCustomer(
-                #                     customerId=consumer_id,
-                #                       language="en",
-                #                       timeZone="Asia/Kolkata",
-                #                       typeof="unknown",
-                #                       preferEmail=True,
-                #                 )
-                #                 logger.error(f"Customer creation error in task_2: {e}")
-                #                  job_obj.job_status = States.FAILED
-                #              job_obj.job_message = (
-                #                   f"{job_obj.job_message} > zonos customer creation failed ({repr(e)})"
-                #             )
-                #            job_obj.save()
-                #           raise e
 
-                # Create Metering Point
                 """try:
                     client_v2.createMeteringPoint(
                         meteringPointId=service_point_id,
@@ -463,9 +451,13 @@ class SmartToSmartReplacementView(APIView):
                     logger.info(f"Store data: {True}")
 
                     device_parameters = {
-                        f"ext.{key}": value if value else ""
-                        for key, value in body.newMeterDetails.model_dump(mode="json").items()
+                        f"ext.{key}": value if value is not None else ""
+                        for key, value in body.newMeterDetails.parameters.model_dump(
+                            mode="json",
+                            exclude_none=True,
+                        ).items()
                     }
+
                     device_parameters["ext.servicepointid"] = (
                         old_sm_device_installation.service_point.id
                     )

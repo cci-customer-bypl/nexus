@@ -75,8 +75,8 @@ class SmartToSmartRequest(BaseModel):
 
     schemaVersion: str
     timestamp: datetime = DateTimeStr
-    requestId: str
-    meterReplacementTransactionId: str
+    requestId: str = Field(min_length=1)
+    meterReplacementTransactionId: str = Field(min_length=1)
     typeOfReplacementCode: Literal["2"]
     retryCount: int | None = None
 
