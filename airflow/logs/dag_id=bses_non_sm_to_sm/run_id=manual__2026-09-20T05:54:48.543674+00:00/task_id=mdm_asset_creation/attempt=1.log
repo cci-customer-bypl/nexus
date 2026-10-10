@@ -1,4 +1,0 @@
-{"timestamp":"2026-09-20T05:54:50.885394Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
-{"timestamp":"2026-09-20T05:54:50.885983Z","level":"info","event":"Filling up the DagBag from /opt/airflow/dags/non_sm_to_sm.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
-{"timestamp":"2026-09-20T05:54:50.980925Z","level":"info","event":"Jobs count: 0","logger":"unusual_prefix_b9dc945caaa2f12a794ddaf1f9e0a4eb0281da82_non_sm_to_sm","filename":"non_sm_to_sm.py","lineno":45}
-{"timestamp":"2026-09-20T05:54:50.981088Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.decorators.python._PythonDecoratedOperator","filename":"python.py","lineno":218}
