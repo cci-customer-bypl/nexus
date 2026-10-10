@@ -2,12 +2,14 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, ConfigDict, AwareDatetime
 from bses_module.models import States
+from typing import Literal, Any
 
 DateTimeStr = Field(json_schema_extra={"example": "1970-01-01T00:00:00Z"})
 
 # ==============================================================================
 # Meter Removal
 # ==============================================================================
+
 
 class MeterRemovalParameters(BaseModel):
     metermake: str | None = None
@@ -17,8 +19,8 @@ class MeterRemovalParameters(BaseModel):
     multiplyingfactor: Decimal | None = None
     ctratio: str | None = None
     ptratio: str | None = None
-    kwhimportfinal: Decimal
-    kvahimportfinal: Decimal
+    kwhimportfinal: Decimal | None = None
+    kvahimportfinal: Decimal | None = None
     kwhexportfinal: Decimal | None = None
     kvahexportfinal: Decimal | None = None
     kwhpeak: Decimal | None = None
@@ -32,9 +34,11 @@ class MeterRemovalParameters(BaseModel):
     meterstatus: str
     meterremovaldate: AwareDatetime = DateTimeStr
 
+
 class MeterRemovalMeterDetails(BaseModel):
-   metersrno: str
-   parameters: MeterRemovalParameters
+    metersrno: str
+    parameters: MeterRemovalParameters
+
 
 class MeterRemovalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -42,7 +46,7 @@ class MeterRemovalRequest(BaseModel):
     timestamp: AwareDatetime = DateTimeStr
     requestId: str | None = None
     meterRemovalTransactionId: str
-    typeOfRemovalode: str
+    typeOfRemovalCode: Literal["4"]
     accountId: str
 
     meterDetails: MeterRemovalMeterDetails
@@ -53,5 +57,5 @@ class MeterRemovalResponse(BaseModel):
     errorCode: str
     message: str
     meterRemovalTransactionId: str
-    typeOfRemovalode: str
-    accountid: str
+    typeOfRemovalCode: str
+    accountId: str

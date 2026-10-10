@@ -361,9 +361,9 @@ class DeviceInstallationParameterValueAdmin(admin.ModelAdmin):
     list_filter = ("parameter",)
 
     search_fields = (
-        "device_installation_id",
+        "=device_installation__id",
         "device_installation__device__device_id",
-        "device_installation__service_point__id",
+        "=device_installation__service_point__id",
         "parameter__name",
     )
 

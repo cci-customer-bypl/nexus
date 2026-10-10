@@ -10,6 +10,7 @@ import logging
 # from zonos_northbound_api.northbound_api import NorthboundApi
 
 from bses_module.schemas.schemas import NonSmartToSmartRequest, NonSmartToSmartResponse
+from bses_module.tasks.non_sm_to_sm import run_non_sm_to_sm_job
 from pydantic import ValidationError
 
 
@@ -74,11 +75,14 @@ class NonSmartToSmartReplacementView(APIView):
             ).exists()
 
             if duplicate_job_exists:
-                raise ValidationError(f"Job is already running for smart meter {sm_device_id}")
+                raise ValueError(f"Job is already running for smart meter {sm_device_id}")
 
             # Check if SM device is already installed
             if DeviceInstallation.objects.filter(device_id=sm_device_id, is_active=True).exists():
                 raise ValueError(f"SM device {sm_device_id} is already installed")
+
+            run_non_sm_to_sm_job.enqueue(job_id=body.meterReplacementTransactionId)
+
         except (ValidationError, ValueError) as exc:
             return Response(
                 {

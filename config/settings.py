@@ -56,16 +56,16 @@ INSTALLED_APPS = [
     # Third-party apps
     "rest_framework",
     "drf_spectacular",
+    "django_celery_beat",
     # Local apps
     "core",
     "bses_module",
 ]
 
 # Redis configuration
-REDIS_URL = env.str(
-    "REDIS_URL",
-    default="redis://localhost:6379/0",
-)
+REDIS_HOST = env.str("REDIS_HOST", default="localhost")
+REDIS_PORT = env.str("REDIS_PORT", default="6379")
+REDIS_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -143,6 +143,16 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# ---------------------------------------------------------
+# Django Tasks
+# ---------------------------------------------------------
+
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_celery.CeleryBackend",
+        "QUEUES": ["default"],
+    },
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -156,14 +166,24 @@ USE_I18N = True
 
 USE_TZ = True
 
-# Celery configuration
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
+# ---------------------------------------------------------
+# Celery Worker
+# ---------------------------------------------------------
+
+CELERY_BROKER_URL = f"{REDIS_URL}/1"
+CELERY_RESULT_BACKEND = f"{REDIS_URL}/2"
+CELERY_RESULT_EXTENDED = True
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
+
+# ---------------------------------------------------------
+# Celery Beat
+# ---------------------------------------------------------
+
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 

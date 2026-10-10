@@ -259,10 +259,10 @@ class NorthboundApi:
     @invalid_token_exception
     @exception_handler
     def setMeteringPointParameters(
-        self, meteringPoint: str, parameter: str, activeAt: str | None
+        self, meteringPoint: str, parameter: dict[str, str], activeAt: str | None
     ) -> list:
         endpoint: str = "/api/1/bulk/metering-point-parameters"
-        data: list[dict[str, str | None]] = [
+        data: list[dict[str, str | dict[str, str] | None]] = [
             {
                 "meteringPoint": meteringPoint,
                 "parameter": parameter,
@@ -460,3 +460,21 @@ class NorthboundApi:
         }
         response: Response = self.restClient.post(endpoint, data, headers)
         return response.json()
+
+    @invalid_token_exception
+    @exception_handler
+    def setDeviceInventoryState(self, device: str, inventoryState: str):
+        endpoint: str = f"/api/1/devices/{device}/inventory-state"
+        data: dict = {
+            "value": inventoryState,
+        }
+
+        headers: dict[str, str] = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        response: Response = self.restClient.put(endpoint, data, headers)
+        logger.info("######################")
+        logger.info(response)
+        logger.info("$$$$$$$$$$$$$$$$$$$$$$")
+        return {"Success": True}

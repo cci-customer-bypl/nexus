@@ -1,29 +1,208 @@
 # Create your views here.
 # bses_module/views.py
-
+from datetime import datetime
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 import logging
-# from zonos_northbound_api.northbound_api import NorthboundApi
 
-from bses_module.schemas import SmartToSmartRequest, SmartToSmartResponse
+from bses_module.schemas.sm_to_sm import SmartToSmartRequest
 from pydantic import ValidationError
-
 
 from core.models import DeviceInstallation
 
 from bses_module.models import SmToSmJob, States
 
 from zonos_northbound_api.northbound_api_v2 import NorthboundApi
+from zonos_northbound_api.northbound_client import client_v2
 
 from config import settings
 
 from core.models import Consumer, DeviceType, DeviceTemplate
 
+
+from zoneinfo import ZoneInfo
+
+from django.db import transaction
+from core.models import (
+    Device,
+    DeviceStatus,
+    Consumer,
+    ServicePoint,
+    DeviceInstallation,
+    Contract,
+    ElectricalNode,
+    GeographicalNode,
+    PaymentType,
+    ConsumerParameterDefinition,
+    ConsumerParameterValue,
+    ServicePointParameterDefinition,
+    ServicePointParameterValue,
+    DeviceParameterDefinition,
+    DeviceParameterValue,
+    DeviceInstallationParameterDefinition,
+    DeviceInstallationParameterValue,
+)
+
 logger = logging.getLogger(__name__)
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def ensure_consumer(consumer_id: str, consumer_name: str) -> tuple[Consumer, bool]:
+    consumer, created = Consumer.objects.get_or_create(
+        consumer_id=consumer_id,
+        defaults={
+            "consumer_name": consumer_name,
+        },
+    )
+    if created:
+        logger.info(f"Consumer {consumer_id} created")
+    else:
+        logger.info(f"Consumer {consumer_id} already exists")
+    return (consumer, created)
+
+
+def create_service_point(
+    service_point_id: str,
+    electrical_node: ElectricalNode,
+    geographical_node: GeographicalNode,
+) -> ServicePoint:
+    service_point = ServicePoint.objects.create(
+        id=service_point_id,
+        electrical_node=electrical_node,
+        geographical_node=geographical_node,
+    )
+    logger.info(f"Service point {service_point_id} created")
+    return service_point
+
+
+def ensure_device(
+    device_id: str, device_type: DeviceType, device_template: DeviceTemplate
+) -> tuple[Device, bool]:
+    device, created = Device.objects.get_or_create(
+        device_id=device_id,
+        defaults={
+            "device_type": device_type,
+            "device_template": device_template,
+        },
+    )
+    if created:
+        logger.info(f"Device {device_id} created")
+    else:
+        logger.info(f"Device {device_id} already exists")
+    return (device, created)
+
+
+def create_contract(
+    service_point: ServicePoint, consumer: Consumer, start_date: datetime, payment_type: PaymentType
+) -> Contract:
+    contract = Contract.objects.create(
+        consumer=consumer,
+        service_point=service_point,
+        start_date=start_date,
+        is_active=True,
+        payment_type=payment_type,
+    )
+    logger.info(f"Contract {contract.id} created")
+    return contract
+
+
+def create_device_installation(
+    device: Device,
+    service_point: ServicePoint,
+    is_active: bool,
+    start_date: datetime,
+    end_date: datetime | None = None,
+):
+    device_installation = DeviceInstallation.objects.create(
+        device=device,
+        service_point=service_point,
+        is_active=is_active,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    logger.info(f"Device installation {device_installation.id} created")
+    return device_installation
+
+
+def bulk_set_consumer_parameters(consumer: Consumer, parameter_config: dict) -> None:
+    parameters = ConsumerParameterDefinition.objects.filter(name__in=parameter_config.keys())
+    ConsumerParameterValue.objects.bulk_create(
+        [
+            ConsumerParameterValue(
+                consumer=consumer,
+                parameter=parameter,
+                value=parameter_config[parameter.name],
+            )
+            for parameter in parameters
+        ]
+    )
+
+
+def bulk_set_service_point_parameters(service_point: ServicePoint, parameter_config: dict) -> None:
+    parameters = ServicePointParameterDefinition.objects.filter(name__in=parameter_config.keys())
+    ServicePointParameterValue.objects.bulk_create(
+        [
+            ServicePointParameterValue(
+                service_point=service_point,
+                parameter=parameter,
+                value=parameter_config[parameter.name],
+            )
+            for parameter in parameters
+        ]
+    )
+
+
+def bulk_set_device_parameters(device: Device, parameter_config: dict) -> None:
+    parameters = DeviceParameterDefinition.objects.filter(name__in=parameter_config.keys())
+    DeviceParameterValue.objects.bulk_create(
+        [
+            DeviceParameterValue(
+                device=device,
+                parameter=parameter,
+                value=parameter_config[parameter.name],
+            )
+            for parameter in parameters
+        ]
+    )
+
+
+def bulk_set_new_sm_device_installation_parameters(
+    device_installation: DeviceInstallation, parameter_config: dict
+) -> None:
+    parameters = DeviceInstallationParameterDefinition.objects.filter(
+        name__in=parameter_config.keys()
+    )
+    DeviceInstallationParameterValue.objects.bulk_create(
+        [
+            DeviceInstallationParameterValue(
+                device_installation=device_installation,
+                parameter=parameter,
+                start_value=parameter_config[parameter.name],
+            )
+            for parameter in parameters
+        ]
+    )
+
+
+def bulk_set_old_sm_device_installation_parameters(
+    device_installation: DeviceInstallation, parameter_config: dict
+) -> None:
+    parameters = DeviceInstallationParameterDefinition.objects.filter(
+        name__in=parameter_config.keys()
+    )
+    DeviceInstallationParameterValue.objects.bulk_create(
+        [
+            DeviceInstallationParameterValue(
+                device_installation=device_installation,
+                parameter=parameter,
+                end_value=parameter_config[parameter.name],
+            )
+            for parameter in parameters
+        ]
+    )
 
 
 class SmartToSmartReplacementView(APIView):
@@ -47,29 +226,38 @@ class SmartToSmartReplacementView(APIView):
         summary="Smart to Smart Meter Replacement",
         description="API to replace smart meters with smart meters or for new service connections",
         request=SmartToSmartRequest,
-        responses={200: SmartToSmartResponse},
+        responses=SmartToSmartRequest,
         tags=["Meter Lifecycle"],
     )
     def post(self, request, *args, **kwargs):
 
+        body: SmartToSmartRequest = SmartToSmartRequest.model_validate(request.data)
         try:
-            body: SmartToSmartRequest = SmartToSmartRequest.model_validate(request.data)
-            sm_device_id = body.newMeterDetails.metersrno
+            new_sm_device_id = body.newMeterDetails.metersrno
+            old_sm_device_id = body.oldMeterDetails.metersrno
 
             # Get SM Device Type and Template
-            sm_device_type_name = f"{body.newMeterDetails.metermake}_{body.newMeterDetails.meterphase}_{body.newMeterDetails.metercategory}"
-            sm_device_template_name = f"{body.newMeterDetails.metermake}_{body.newMeterDetails.meterphase}_{body.newMeterDetails.metercategory}"
-            sm_device_type = DeviceType.objects.filter(name=sm_device_type_name).exists()
-            sm_device_template = DeviceTemplate.objects.filter(
-                name=sm_device_template_name
+            new_sm_device_type_name = f"{body.newMeterDetails.parameters.metermake}_{body.newMeterDetails.parameters.meterphase}_{body.newMeterDetails.parameters.metercategory}"
+            new_sm_device_template_name = f"{body.newMeterDetails.parameters.metermake}_{body.newMeterDetails.parameters.meterphase}_{body.newMeterDetails.parameters.metercategory}"
+            new_sm_device_type = DeviceType.objects.filter(name=new_sm_device_type_name).exists()
+            new_sm_device_template = DeviceTemplate.objects.filter(
+                name=new_sm_device_template_name
             ).exists()
 
-            if not sm_device_type or not sm_device_template:
+            if not new_sm_device_type or not new_sm_device_template:
                 raise ValueError("SM device type or template does not exist")
 
-            # Check if SM device is already installed
-            if DeviceInstallation.objects.filter(device_id=sm_device_id, is_active=True).exists():
-                raise ValueError(f"SM device {sm_device_id} is already installed")
+            # Check if old SM device is already not installed
+            if not DeviceInstallation.objects.filter(
+                device_id=old_sm_device_id, is_active=True
+            ).exists():
+                raise ValueError(f"Old SM device {old_sm_device_id} is already not installed")
+
+            # Check if new SM device is already installed
+            if DeviceInstallation.objects.filter(
+                device_id=new_sm_device_id, is_active=True
+            ).exists():
+                raise ValueError(f"New SM device {new_sm_device_id} is already installed")
         except (ValidationError, ValueError) as exc:
             return Response(
                 {
@@ -89,32 +277,34 @@ class SmartToSmartReplacementView(APIView):
             )
 
         consumer_id = body.consumerMaster.accountId
-        sm_device_id = body.newMeterDetails.metersrno
 
         try:
             # Create the job
 
+            job_id = (body.meterReplacementTransactionId,)
             SmToSmJob.objects.create(
-                job_id=body.meterReplacementTransactionId,
+                job_id=job_id,
                 consumer_id=consumer_id,
-                sm_device_id=sm_device_id,
+                old_sm_device_id=old_sm_device_id,
+                new_sm_device_id=new_sm_device_id,
                 payload=body.model_dump(mode="json"),
                 job_created_at=body.timestamp,
                 job_status=States.READY,
             )
 
             # job = SmToSmJob.objects.get(job_id=body.meterReplacementTransactionId)
-            return Response(
-                {
-                    "status": States.READY,
-                    "errorCode": None,
-                    "message": "SM to SM job created successfully",
-                    "meterReplacementTransactionId": body.meterReplacementTransactionId,
-                    "typeOfReplacementCode": body.typeOfReplacementCode,
-                    "accountId": body.consumerMaster.accountId,
-                },
-                status=status.HTTP_200_OK,
-            )
+        # jobs_queryset = SmToSmJob.objects.filter(job_status=States.READY)
+        #            return Response(
+        #                {
+        #                    "status": States.READY,
+        #                    "errorCode": None,
+        #                    "message": "SM to SM job created successfully",
+        #                    "meterReplacementTransactionId": body.meterReplacementTransactionId,
+        #                    "typeOfReplacementCode": body.typeOfReplacementCode,
+        #                    "accountId": body.consumerMaster.accountId,
+        #                },
+        #                status=status.HTTP_200_OK,
+        #            )
 
         except Exception as e:
             return Response(
@@ -130,12 +320,302 @@ class SmartToSmartReplacementView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # # 2. Success response envelope
-        # return Response({
-        #     "status": "SUCCESS",
-        #     "errorCode": None,
-        #     "message": "Consumer and meter created successfully",
-        #     "meterReplacementTransactionId": data["meterReplacementTransactionId"],
-        #     "typeOfReplacementCode": data["typeOfReplacementCode"],
-        #     "accountId": data["consumerMaster"]["accountId"]
-        # }, status=status.HTTP_200_OK)
+        logger.info(f"Processing job {job_id}")
+        logger.debug(f"Job: {job_id}")
+        job_obj = SmToSmJob.objects.get(job_id=job_id)
+        job_obj.job_status = States.IN_PROGRESS
+        job_obj.job_message = f"{job_obj.job_message}\n Processing job {job_id}"
+        job_obj.save()
+        logger.info(f"Updated {job_id} job status to IN_PROGRESS")
+
+        #            Task 1
+        #                - ensure consumer
+        #                - ensure service point
+        #                - ensure new_sm_device
+        #                - ensure old_sm_device
+        #                - create contract
+        #                - create new_sm_device installation
+        #                - create old_sm_device uninstallation
+        #                - else rollback
+
+        try:
+            with transaction.atomic():
+                # Get consumer
+                #                consumer = Consumer.objects.get(consumer_id=consumer_id)
+                #                logger.info(f"Consumer {consumer_id} already exists")
+
+                # Get Old Device
+                old_sm_device = Device.objects.get(device_id=old_sm_device_id)
+                old_sm_device.status = DeviceStatus.REMOVED
+                old_sm_device.save()
+                logger.info(f"Old device {old_sm_device_id} status changed to REMOVED")
+
+                # Get Device Installation for Old Device Id
+                old_sm_device_installation = DeviceInstallation.objects.get(
+                    device=old_sm_device, is_active=True
+                )
+                # Set Old Device Installation end parameters
+                bulk_set_old_sm_device_installation_parameters(
+                    old_sm_device_installation,
+                    body.oldMeterDetails.parameters.model_dump(exclude={"metersrno"}),
+                )
+
+                # set old device installation is active false
+                old_sm_device_installation.is_active = False
+                old_sm_device_installation.save()
+
+                logger.info(
+                    f"Old SM device installation {old_sm_device_installation.id} set to False"
+                )
+
+                # Create new SM device
+                new_sm_device = Device.objects.create(
+                    device_id=new_sm_device_id,
+                    device_type=new_sm_device_type,
+                    device_template=new_sm_device_template,
+                )
+
+                logger.info(f"New SM device {new_sm_device_id} created")
+
+                # Set new SM device parameters
+                bulk_set_device_parameters(
+                    device=new_sm_device,
+                    parameter_config=body.newMeterDetails.parameters.model_dump(
+                        exclude={"metersrno"}
+                    ),
+                )
+
+                logger.info(f"New SM device parameters set {new_sm_device_id}")
+
+                # Create new SM device installation
+                new_sm_device_installation = create_device_installation(
+                    device=new_sm_device,
+                    service_point=old_sm_device_installation.service_point,
+                    is_active=True,
+                    start_date=body.timestamp,
+                )
+
+                logger.info(f"New SM device installation {new_sm_device_installation.id} created")
+
+                # Set parameters for new sm device installation
+                bulk_set_new_sm_device_installation_parameters(
+                    device_installation=new_sm_device_installation,
+                    parameter_config=body.newMeterDetails.parameters.model_dump(
+                        exclude={"metersrno"}
+                    ),
+                )
+
+                logger.info(">>>>>>>>>>>>>>>>")
+                # Get old sm device type and template
+                old_type_template_name = f"{body.oldMeterDetails.parameters.metermake}_{body.oldMeterDetails.parameters.meterphase}_{body.oldMeterDetails.parameters.metercategory}"
+                #                logger.info(DeviceType.objects.filter(old_type_template_name))
+                #                logger.info("||||||||||||||||")
+                #                logger.info(DeviceType.objects.get(old_type_template_name))
+                old_sm_device_type = DeviceType.objects.get(
+                    #                    id="9c423eb7-e2dc-4a66-b82f-409be8bb4268"
+                    #                    id="705c53bc-5de5-4112-b80f-97a87dac3756"
+                    name=old_type_template_name
+                )
+                logger.info("<<<<<<<<<<<<<<<<")
+                old_sm_device_template = DeviceTemplate.objects.get(
+                    #                    id="705c53bc-5de5-4112-b80f-97a87dac3756"
+                    name=old_type_template_name
+                )
+
+                #                if body.oldMeterDetails:
+                old_sm_device_id = body.oldMeterDetails.metersrno
+
+                # Create or get old SM device
+                old_sm_device, created = ensure_device(
+                    device_id=old_sm_device_id,
+                    device_type=old_sm_device_type,
+                    device_template=old_sm_device_template,
+                )
+
+                # Set parameters for old sm device
+                bulk_set_device_parameters(
+                    device=old_sm_device,
+                    parameter_config=body.oldMeterDetails.model_dump(exclude={"metersrno"}),
+                )
+
+                # Un-install old sm_device
+                old_sm_device_installation = DeviceInstallation.objects.get(
+                    device=old_sm_device, is_active=True
+                )
+                old_sm_device_installation.is_active = False
+                old_sm_device_installation.save()
+
+                # Set parameters for old sm device uninstallation
+                bulk_set_old_sm_device_installation_parameters(
+                    device_installation=old_sm_device_installation,
+                    parameter_config=body.oldMeterDetails.model_dump(exclude={"metersrno"}),
+                )
+
+                job_obj.service_point_id = service_point.id
+                job_obj.job_message = f"{job_obj.job_message}\n MDM Asset creation completed"
+                job_obj.save()
+                logger.info(f"Completed successfully for job {job_id}")
+
+                #        Invoke zonos northbound api
+                #            - Create customer
+                #            - Create metering point
+                #            - Set metering point parameters
+                #            - Create device with device parameters
+
+                group_uuid = "e327f3e7-774d-48e2-b44a-f26e5b3a9434"
+                # Create customer
+                #                try:
+                #                   client_v2.createCustomer(
+                #                     customerId=consumer_id,
+                #                       language="en",
+                #                       timeZone="Asia/Kolkata",
+                #                       typeof="unknown",
+                #                       preferEmail=True,
+                #                 )
+                #                 logger.error(f"Customer creation error in task_2: {e}")
+                #                  job_obj.job_status = States.FAILED
+                #              job_obj.job_message = (
+                #                   f"{job_obj.job_message} > zonos customer creation failed ({repr(e)})"
+                #             )
+                #            job_obj.save()
+                #           raise e
+
+                # Create Metering Point
+                """try:
+                    client_v2.createMeteringPoint(
+                        meteringPointId=service_point_id,
+                        groupUuid=group_uuid,
+                        latitude=body.consumerMaster.parameters.latitude,
+                        longitude=body.consumerMaster.parameters.longitude,
+                    )
+                except Exception as e:
+                    logger.error(f"Metering Point creation error in task_2: {e}")
+                    job_obj.job_status = States.FAILED
+                    job_obj.job_message = (
+                        f"{job_obj.job_message} > zonos metering point creation failed ({repr(e)})"
+                    )
+                    job_obj.save()
+                    raise e"""
+
+                # Create Device
+                try:
+                    device_id = new_sm_device_id
+                    logger.info(f"Device type template name: {new_type_template_name}")
+                    device_type_uuid = str(DeviceType.objects.get(name=new_type_template_name).id)
+                    device_template_uuid = str(
+                        DeviceTemplate.objects.get(name=new_type_template_name).id
+                    )
+
+                    logger.info(f"Device type uuid: {device_type_uuid}")
+                    logger.info(f"Device template uuid: {device_template_uuid}")
+                    logger.info(f"Device id: {device_id}")
+                    logger.info(f"Communication id: {device_id}")
+                    logger.info(f"Group uuid: {group_uuid}")
+                    logger.info(f"Store data: {True}")
+
+                    device_parameters = {
+                        f"ext.{key}": value if value else ""
+                        for key, value in body.newMeterDetails.model_dump(
+                            exclude={"metersrno"}, mode="json"
+                        ).items()
+                    }
+                    device_parameters["ext.servicepointid"] = service_point_id
+
+                    device: dict = {
+                        "id": device_id,
+                        "communicationId": device_id,
+                        "groupId": group_uuid,
+                        "typeId": device_type_uuid,
+                        "templateId": device_template_uuid,
+                        "model": body.newMeterDetails.parameters.meterphase,
+                        "manufacturer": body.newMeterDetails.parameters.metermake,
+                        "description": "",
+                        "inventoryState": "installed",
+                        "dispatchGroup": "",
+                        "storeData": True,
+                        "parentId": None,
+                        "configuration": device_parameters,
+                    }
+
+                    response = client_v2.createDevice(device=device)
+                    logger.info(f"Device creation response: {response}")
+
+                except Exception as e:
+                    logger.error(f"Device creation error in task_2: {e}")
+                    job_obj.job_status = States.FAILED
+                    job_obj.job_message = (
+                        f"{job_obj.job_message} > zonos device creation failed ({repr(e)})"
+                    )
+                    job_obj.save()
+                    raise e
+
+                # Set Metering Point parameters
+                try:
+                    #    metering_point_parameters = {
+                    #        f"ext.{key}": value
+                    #        for key, value in body.consumerMaster.model_dump(
+                    #            exclude={"meterinstalldate", "latitude", "longitude", "meterStatus"},
+                    #            mode="json",
+                    #        ).items()
+                    #    }
+                    metering_point_parameters = {"ext.device_id": new_sm_device_id}
+
+                    response = client_v2.bulkSetMeteringPointParameters(
+                        meteringPoint=service_point_id,
+                        parameters=metering_point_parameters,
+                    )
+
+                    logger.info(f"Metering Point parameters set response: {response}")
+
+                except Exception as e:
+                    logger.error(f"Metering Point parameters set error: {e}")
+                    job_obj.job_status = States.FAILED
+                    job_obj.job_message = f"{job_obj.job_message} > zonos metering point parameters set failed ({repr(e)})"
+                    job_obj.save()
+                    returnMessage = str(e)
+                    errCode = "ERROR01"
+            #                    raise e
+
+            job_obj.job_status = States.COMPLETED
+            job_obj.job_message = f"{job_obj.job_message}\n Zonos Asset creation completed"
+            job_obj.save()
+            returnMessage = "Consumer and meter created successfully"
+            errCode = None
+
+        except Exception as e:
+            logger.error(f"Error in Zonos Asset creation {e}")
+            job_obj.job_status = States.FAILED
+            job_obj.job_message = str(e)
+            job_obj.save()
+            returnMessage = str(e)
+            errCode = "ERROR02"
+        #            raise e
+        return Response(
+            {
+                "status": "SUCCESS",
+                "errorCode": errCode,
+                "message": returnMessage,
+                "meterReplacementTransactionId": body.meterReplacementTransactionId,
+                "typeOfReplacementCode": body.typeOfReplacementCode,
+                "accountId": body.consumerMaster.accountId,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+#    jobs = get_jobs()
+
+#    task_1 = task_1.expand(job=jobs)
+#    task_2 = task_2.expand(job=task_1)
+#    complete_job_status.expand(job=task_2)
+
+
+# # 2. Success response envelope
+# return Response({
+#     "status": "SUCCESS",
+#     "errorCode": None,
+#     "message": "Consumer and meter created successfully",
+#     "meterReplacementTransactionId": data["meterReplacementTransactionId"],
+#     "typeOfReplacementCode": data["typeOfReplacementCode"],
+#     "accountId": data["consumerMaster"]["accountId"]
+# }, status=status.HTTP_200_OK)

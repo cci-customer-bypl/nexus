@@ -13,6 +13,7 @@ dependencies = [
     "django-environ>=0.14.0",
     "django-stubs>=6.1.1",
     "django-tasks>=0.12.0",
+    "django-tasks-celery[celery]>=0.1.1",
     "djangorestframework>=3.18.0",
     "drf-spectacular>=0.30.0",
     "gunicorn>=26.2.0",

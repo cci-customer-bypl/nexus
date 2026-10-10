@@ -857,6 +857,23 @@ wheels = [
 ]
 
 [[package]]
+name = "django-tasks-celery"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8a/a0/8144a9235de7107fda19a4e1aafa0475939bc798c85e61f4f1ea56d6c5e0/django_tasks_celery-0.1.1.tar.gz", hash = "sha256:1c2265627d02e30d162d280503c4b4a9832c4677841c2127bd52be3b61ed3431", size = 8217, upload-time = "2026-04-08T19:59:24.771Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3a/1b/bc131c4b6324bbe25239510ef52d954e69b1d60c1f413afc594bfb8c258c/django_tasks_celery-0.1.1-py3-none-any.whl", hash = "sha256:bd27edde3b7be2209979af51215ef1eba797b1fe11d93574b09f83fc150f0bfa", size = 8329, upload-time = "2026-04-08T19:59:23.37Z" },
+]
+
+[package.optional-dependencies]
+celery = [
+    { name = "celery" },
+]
+
+[[package]]
 name = "django-timezone-field"
 version = "7.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1459,6 +1476,7 @@ dependencies = [
     { name = "django-environ" },
     { name = "django-stubs" },
     { name = "django-tasks" },
+    { name = "django-tasks-celery", extra = ["celery"] },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
     { name = "gunicorn" },
@@ -1486,6 +1504,7 @@ requires-dist = [
     { name = "django-environ", specifier = ">=0.14.0" },
     { name = "django-stubs", specifier = ">=6.1.1" },
     { name = "django-tasks", specifier = ">=0.12.0" },
+    { name = "django-tasks-celery", extras = ["celery"], specifier = ">=0.1.1" },
     { name = "djangorestframework", specifier = ">=3.18.0" },
     { name = "drf-spectacular", specifier = ">=0.30.0" },
     { name = "gunicorn", specifier = ">=26.2.0" },

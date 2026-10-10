@@ -11,17 +11,17 @@ DateTimeStr = Field(json_schema_extra={"example": "1970-01-01T00:00:00Z"})
 # ==============================================================================
 
 
-class GeographicalMasterHierarchy(BaseModel):
-    subDivisionCode: str
+# class GeographicalMasterHierarchy(BaseModel):
+#     subDivisionCode: str
 
 
-class ElectricalMasterHierarchy(BaseModel):
-    dtrCode: str
+# class ElectricalMasterHierarchy(BaseModel):
+#     dtrCode: str
 
 
-class ConsumerMasterHierarchy(BaseModel):
-    geographicalMasterHierarchy: GeographicalMasterHierarchy
-    electricalMasterHierarchy: ElectricalMasterHierarchy
+# class ConsumerMasterHierarchy(BaseModel):
+#     geographicalMasterHierarchy: GeographicalMasterHierarchy
+#     electricalMasterHierarchy: ElectricalMasterHierarchy
 
 
 # ==============================================================================
@@ -29,13 +29,13 @@ class ConsumerMasterHierarchy(BaseModel):
 # ==============================================================================
 
 
-class ConsumerPosition(BaseModel):
-    latitude: float
-    longitude: float
+# class ConsumerPosition(BaseModel):
+#     latitude: float
+#     longitude: float
 
 
 class ConsumerMasterParameters(BaseModel):
-    consumerName: str
+    consumerName: str = Field(min_length=1)
     address1: str
     connectionStatus: str
     tariffCode: str
@@ -46,6 +46,8 @@ class ConsumerMasterParameters(BaseModel):
     meterTypeFlag: str
 
     isVip: str = Field(default="N", max_length=1, examples=["Y", "N"])
+    subDivisionCode: str
+    dtrCode: str
 
     # Optional
     firstName: str | None = None
@@ -86,20 +88,30 @@ class ConsumerMasterParameters(BaseModel):
     adjustmentType: str | None = None
     scheduledBillingDate: str | None = None
 
+    latitude: float | None = Field(default=None, examples=[28.6139])
+    longitude: float | None = Field(default=None, examples=[77.2090])
+
+    @model_validator(mode="after")
+    def validate_mobile_number(self):
+        if self.latitude is None and self.longitude is not None:
+            raise ValueError("longitude without latitude is not allowed")
+        if self.latitude is not None and self.longitude is None:
+            raise ValueError("latitude without longitude is not allowed")
+        return self
+
 
 class ConsumerMaster(BaseModel):
     # Mandatory
     accountId: str = Field(min_length=1, max_length=32)
     parameters: ConsumerMasterParameters
-    position: ConsumerPosition | None = Field(
-        default=None,
-        examples=[
-            {
-                "latitude": 28.6139,
-                "longitude": 77.2090,
-            }
-        ],
-    )
+    # position: ConsumerPosition | None = Field(
+    #     examples=[
+    #         {
+    #             "latitude": 28.6139,
+    #             "longitude": 77.2090,
+    #         }
+    #     ],
+    # )
 
 
 # ==============================================================================
@@ -202,16 +214,16 @@ class NonSmartToSmartRequest(BaseModel):
     schemaVersion: str
     timestamp: datetime = DateTimeStr
     requestId: str
-    meterReplacementTransactionId: str
+    meterReplacementTransactionId: str = Field(min_length=1)
     typeOfReplacementCode: Literal["1"]
     retryCount: int | None = None
 
     consumerMaster: ConsumerMaster
-    consumerMasterHierarchy: ConsumerMasterHierarchy
+    # consumerMasterHierarchy: ConsumerMasterHierarchy
     newMeterDetails: NewMeterDetails
 
     financialDetails: FinancialDetails | None = None
-    oldMeterDetails: OldMeterDetails | None = None
+    oldMeterDetails: OldMeterDetails | None = Field(default=None)
     additionalNonMandatoryParams: AdditionalNonMandatoryParams | None = None
 
 

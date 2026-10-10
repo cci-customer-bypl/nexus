@@ -15,6 +15,9 @@ from config import settings
 from zonos_northbound_api.northbound_api import NorthboundApi
 from bses_module.models import States
 from bses_module.models import BillingRcmJob
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BillingRcmView(APIView):
@@ -119,8 +122,16 @@ class BillingRcmView(APIView):
         try:
             # data is now an OdrInbound Pydantic object
             self.launch_odr(body)
-            self.insert_job(body)
 
+            # Create records in the billing_rcm_job table
+            for device_id in body.devices:
+                BillingRcmJob.objects.create(
+                    device_id_id=device_id,
+                    from_time=body.fromTime,
+                    to_time=body.toTime,
+                    reading_reason=body.readingReason,
+                    remaining_attempts=2,
+                )
             # 2. Success response envelope
             return Response(
                 BillingRcmResponse(
@@ -149,7 +160,7 @@ class BillingRcmView(APIView):
                 status=error.response.status_code,
             )
         except Exception as error:
-            # logger.error(f"Error launching ODR: {error}")
+            logger.error(f"Error launching ODR: {error}")
             return Response(
                 BillingRcmResponse(
                     status=States.FAILED,
