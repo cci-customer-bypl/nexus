@@ -10,7 +10,7 @@ DateTimeStr = Field(json_schema_extra={"example": "1970-01-01T00:00:00Z"})
 # ==============================================================================
 # Old Meter Details Schema
 # ==============================================================================
-class OldMeterParameters(BaseModel):
+class OldMeterParametersSmToSM(BaseModel):
     metermake: str
     meterphase: str
     metercategory: str
@@ -31,12 +31,12 @@ class OldMeterParameters(BaseModel):
     meterremovaldate: datetime | None = None
 
 
-class OldMeterDetails(BaseModel):
+class OldMeterDetailsSmToSM(BaseModel):
     metersrno: str = Field(min_length=1)
-    parameters: OldMeterParameters
+    parameters: OldMeterParametersSmToSM
 
 
-class NewMeterParamters(BaseModel):
+class NewMeterParamtersSmToSM(BaseModel):
     metermake: str = Field(min_length=1)
     meterphase: str = Field(min_length=1)
     metercategory: str = Field(min_length=1)
@@ -60,9 +60,9 @@ class NewMeterParamters(BaseModel):
     meterinstalldate: datetime
 
 
-class NewMeterDetails(BaseModel):
+class NewMeterDetailsSmToSM(BaseModel):
     metersrno: str = Field(min_length=1)
-    parameters: NewMeterParamters
+    parameters: NewMeterParamtersSmToSM
 
 
 # ==============================================================================
@@ -82,10 +82,10 @@ class SmartToSmartRequest(BaseModel):
 
     accountId: str = Field(min_length=1, max_length=32)
     #    consumerMasterHierarchy: ConsumerMasterHierarchy
-    newMeterDetails: NewMeterDetails
+    newMeterDetails: NewMeterDetailsSmToSM
 
     # financialDetails: FinancialDetails | None = None
-    oldMeterDetails: OldMeterDetails
+    oldMeterDetails: OldMeterDetailsSmToSM
 
 
 class SmartToSmartResponse(BaseModel):

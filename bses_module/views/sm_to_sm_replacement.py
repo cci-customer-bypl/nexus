@@ -188,21 +188,28 @@ def bulk_set_new_sm_device_installation_parameters(
 
 
 def bulk_set_old_sm_device_installation_parameters(
-    device_installation: DeviceInstallation, parameter_config: dict
+    device_installation: DeviceInstallation,
+    parameter_config: dict,
 ) -> None:
+
     parameters = DeviceInstallationParameterDefinition.objects.filter(
         name__in=parameter_config.keys()
     )
-    DeviceInstallationParameterValue.objects.bulk_create(
-        [
-            DeviceInstallationParameterValue(
-                device_installation=device_installation,
-                parameter=parameter,
-                end_value=parameter_config[parameter.name],
-            )
-            for parameter in parameters
-        ]
-    )
+
+    for parameter in parameters:
+        obj, created = DeviceInstallationParameterValue.objects.update_or_create(
+            device_installation=device_installation,
+            parameter=parameter,
+            defaults={
+                "end_value": parameter_config[parameter.name],
+            },
+        )
+
+        logger.info(
+            "Installation parameter %s: %s",
+            parameter.name,
+            "created" if created else "updated",
+        )
 
 
 class SmartToSmartReplacementView(APIView):
@@ -271,7 +278,7 @@ class SmartToSmartReplacementView(APIView):
                         "meterReplacementTransactionId"
                     ),
                     "typeOfReplacementCode": request.data.get("typeOfReplacementCode"),
-                    "accountId": request.data.get("consumerMaster")["accountId"],
+                    "accountId": request.data.get("accountId"),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
